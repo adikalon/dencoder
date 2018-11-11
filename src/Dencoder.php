@@ -2,6 +2,8 @@
 
 namespace Hellpers;
 
+use Exception;
+
 /**
  * Набор методов кодирования/декодирования строк в разные форматы
  *
@@ -10,69 +12,72 @@ namespace Hellpers;
 class Dencoder
 {
     /**
-     * @var array Массив запрещенных имен файлов/папкоу в системе windows
+     * @var array Массив возможных кодировок
      */
-    private static $antiNames = [
-        'CON',
-        'NUL',
-        'AUX',
-        'PRN',
-        'COM1',
-        'COM2',
-        'COM3',
-        'COM4',
-        'COM5',
-        'COM6',
-        'COM7',
-        'COM8',
-        'COM9',
-        'LPT1',
-        'LPT2',
-        'LPT3',
-        'LPT4',
-        'LPT5',
-        'LPT6',
-        'LPT7',
-        'LPT8',
-        'LPT9'
+    private static $encodings = [
+        'UTF-8',
+        'CP1251',
+        'ASCII',
     ];
 
     /**
-     * Преобразование кодировки в utf-8
-     * @param string $string Строка для преобразования
-     * @return string Преобразованная строка
+     * @var array Массив синонимов вызываемых методов
      */
-    public static function utf8($string)
-    {
-        return mb_convert_encoding($string, 'UTF-8', 'auto');
-    }
+    private static $synonyms = [
+        'UTF-8'  => [
+            'utf-8',
+            'utf8',
+        ],
+        'CP1251' => [
+            'cp1251',
+            '1251',
+            'windows1251',
+            'windows-1251',
+            'win1251',
+            'win-1251',
+            'ansi',
+        ],
+    ];
 
     /**
-     * Экранирование всех букв
-     * @param string $string Строка
-     * @return string Строка, каждая буква которой - экранирована
+     * Определяем какой метод необходимо вызвать
+     * @param string $name Имя вызываемого метода
+     * @param array $arguments Параметры переданный в метод
+     * @return mixed Результат работы метода
+     * @throws Exception
      */
-    public static function quote($string)
+    public static function __callStatic(string $name, array $args)
     {
-        return preg_replace('/(\w)/ui', '\\\$1', $string);
-    }
-
-    /**
-     * Корректировка имени файла/папки
-     * @param string $string Имя
-     * @param string $symbol Символ, которым запрещенные символы будут заменены
-     * @return string Откорректированное имя
-     */
-    public static function name($string, $symbol = '_')
-    {
-        $string = str_replace('/', $symbol, $string);
-        if (stristr(strtolower(php_uname('s')), 'win') !== false) {
-            $string = str_replace(['\\', ':', '*', '?', '"', '<', '>', '|'], $symbol, $string);
-            if (in_array(strtoupper($string), self::$antiNames)) {
-                $string .= $symbol;
+        foreach (self::$synonyms as $encoding => $synonyms) {
+            if (in_array(mb_strtolower($name), $synonyms)) {
+                unset($name, $synonyms);
+                return self::encode($args[0], $encoding);
             }
+            unset($encoding, $synonyms);
         }
-        unset($symbol);
-        return trim($string);
+
+        unset($args);
+
+        throw new Exception("Отсутствует метод " . __CLASS__ . "::$name()");
     }
+
+    /**
+     * Изменение кодировки строки
+     * @param string $string Строка, которой необходимо изменить кодировку
+     * @param string $encoding Новая кодировка
+     * @return string Строка в новой кодировке
+     */
+    private static function encode(string $string, string $encoding): string
+    {
+        $stringEncoding = mb_detect_encoding($string, self::$encodings);
+
+        if ($stringEncoding != $encoding) {
+            $string = mb_convert_encoding($string, $encoding, $stringEncoding);
+        }
+
+        unset($encoding, $stringEncoding);
+
+        return $string;
+    }
+
 }
